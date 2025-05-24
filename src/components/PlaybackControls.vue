@@ -1,20 +1,25 @@
 <template>
     <div class="playback-controls">
-      <div class="progress-bar-container">
-        <input
-          type="range"
-          min="0"
-          :max="duration"
-          :value="currentTime"
-          step="0.1"
-          class="progress-slider"
-          @input="handleSliderInput"
-          @change="handleSliderChange"
-          ref="progressBar" >
-        <div class="time-labels">
-             <span class="current-time">{{ formatTime(currentTime) }}</span> <span class="duration">-{{ formatTime(duration > 0 ? duration - currentTime : 0) }}</span>
+        <div class="progress-bar-container">
+            <input
+                type="range"
+                min="0"
+                :max="duration"
+                :value="currentTime"
+                step="0.1"
+                class="progress-slider"
+                @input="handleSliderInput"
+                @change="handleSliderChange"
+                @mousedown="handleSliderMouseDown"
+                @touchstart="handleSliderMouseDown"
+                @mouseup="handleSliderMouseUp"
+                @touchend="handleSliderMouseUp"
+                @mouseleave="handleSliderMouseUp"
+                ref="progressBar" >
+            <div class="time-labels">
+                <span class="current-time">{{ formatTime(currentTime) }}</span> <span class="duration">-{{ formatTime(duration > 0 ? duration - currentTime : 0) }}</span>
+            </div>
         </div>
-      </div>
 
       <div class="main-button-row"> <div class="shuffle-button-wrapper">
               <button class="control-button small">
@@ -70,9 +75,9 @@
     </div>
   </template>
 
-  <script setup>
+<script setup>
     // 导入 ref 和 onMounted
-    import { defineProps, defineEmits, ref, onMounted, watch } from 'vue';
+    import { defineEmits, defineProps, onMounted, ref, watch } from 'vue';
 
     const props = defineProps({
       isPlaying: { type: Boolean, default: false },
@@ -86,42 +91,47 @@
     // 创建对滑块元素的引用
     const progressBar = ref(null);
     const volumeBar = ref(null);
+    const isUserSeeking = ref(false); // 新增：跟踪用户是否正在拖动进度条
+    const seekTimeOnRelease = ref(0); // 存储用户松手时的进度
 
     // 更新滑块填充样式的函数
     const updateSliderFill = (sliderElement, value, max) => {
         if (!sliderElement || !max || max === 0) {
-            // 如果元素或最大值无效，设置填充为 0%
             if (sliderElement) {
                  sliderElement.style.setProperty('--fill-percentage', '0%');
             }
              return;
         }
-        // 计算填充百分比
         const percentage = (value / max) * 100;
-        // 设置 CSS 变量 --fill-percentage
         sliderElement.style.setProperty('--fill-percentage', `${percentage}%`);
     };
 
 
     const handleSliderInput = (event) => {
-        // 当滑块拖动时，实时更新填充样式
+        // 当滑块拖动时，实时更新填充样式和 seekTimeOnRelease
         const value = parseFloat(event.target.value);
         updateSliderFill(progressBar.value, value, props.duration);
-        // emit('seek', value); // Seek 只在 change 时触发，input 用于实时更新 UI
+        seekTimeOnRelease.value = value; // 记录拖动中的值
     };
 
     const handleSliderChange = (event) => {
-        // 当滑块释放时，触发 seek 事件
-        const time = parseFloat(event.target.value);
-        emit('seek', time);
-        // 确保松开滑块后样式也正确更新一次（虽然 input 已经做了）
-        updateSliderFill(progressBar.value, time, props.duration);
+        // 当滑块释放时，触发 seek 事件，使用 seekTimeOnRelease 的值
+        emit('seek', seekTimeOnRelease.value);
+        updateSliderFill(progressBar.value, seekTimeOnRelease.value, props.duration);
+        isUserSeeking.value = false; // 拖动结束后重置状态
+    };
+
+    const handleSliderMouseDown = () => {
+        isUserSeeking.value = true; // 用户开始拖动
+    };
+
+    const handleSliderMouseUp = () => {
+        // handleSliderChange 也会在 mouseup 时触发，在那里处理 seek
     };
 
     const handleVolumeSliderChange = (event) => {
         const newVolume = parseFloat(event.target.value);
-        // 当音量滑块调节时，实时更新填充样式
-        updateSliderFill(volumeBar.value, newVolume, 1); // 音量 max 是 1
+        updateSliderFill(volumeBar.value, newVolume, 1);
         emit('setVolume', newVolume);
     };
 
@@ -135,29 +145,25 @@
          return `${minutes}:${formattedSeconds}`;
      };
 
-     // 在组件挂载后，初始化滑块填充样式
      onMounted(() => {
          updateSliderFill(progressBar.value, props.currentTime, props.duration);
          updateSliderFill(volumeBar.value, props.volume, 1);
      });
 
-     // 监听 props 的变化，确保外部数据更新时滑块样式也更新
      watch(() => props.currentTime, (newValue) => {
-         updateSliderFill(progressBar.value, newValue, props.duration);
+         if (!isUserSeeking.value) {
+             updateSliderFill(progressBar.value, newValue, props.duration);
+         }
      });
 
       watch(() => props.duration, (newValue) => {
-          // 当歌曲切换或 duration 变化时，更新进度条样式
           updateSliderFill(progressBar.value, props.currentTime, newValue);
       });
-
 
      watch(() => props.volume, (newValue) => {
          updateSliderFill(volumeBar.value, newValue, 1);
      });
-
-
-  </script>
+</script>
 <style scoped>
 /* ======================================== */
 /* === 最终滑块样式：移除边框和阴影 === */

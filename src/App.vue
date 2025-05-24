@@ -18,7 +18,7 @@
       </div>
 
       <div class="right-panel">
-        <LyricsDisplay :lyrics="currentLyrics" :currentTime="currentTime" />
+        <LyricsDisplay :lyrics="currentLyrics" :currentTime="currentTime" @lyric-clicked="handleLyricClicked" />
       </div>
 
       <button class="close-button">X</button>
@@ -38,44 +38,41 @@
   </div>
 </template>
 
-
 <script setup>
-  import { ref, computed, onMounted, watch } from 'vue'; // 导入 watch
-  import SongInfo from './components/SongInfo.vue';
-  import PlaybackControls from './components/PlaybackControls.vue';
-  import LyricsDisplay from './components/LyricsDisplay.vue';
-  import { parseLrc } from './utils/lrcParser';
+  import { onMounted, ref } from 'vue';
+import { getPlaylist, setPlaylist } from './utils/playlistStorage';
 
-  // ---- 响应式状态 ----
-  const audioPlayer = ref(null);
-  const isPlaying = ref(false);
-  const currentTime = ref(0);
-  const duration = ref(0);
-  const volume = ref(0.5); // <-- 添加音量状态，初始值 0.5
+  const playlist = ref(getPlaylist());
 
-  // ... playlist 和 computed 属性 currentSong, currentLyrics 保持不变 ...
-  const playlist = ref([
-    {
-      id: 1,
-      title: 'Da Capo',
-      artist: 'HOYO-MiX',
-      album: '崩坏3 印象曲',
-      coverUrl: '/cover.jpg', // 替换为你实际的封面图片路径
-      audioUrl: 'https://ipv4.home.445533.xyz:3116/api/download/2026565329?source=netease&br=128kmp3', // **你需要把音频文件放到 public 文件夹里，并修改这里的路径**
-      lrcString: `[00:00.000] 作词 : TetraCalyx\n[00:00.048] 作曲 : 蔡近翰Zoe(HOYO-MiX)\n[00:00.096] 编曲 : 宫奇Gon(HOYO-MiX)/苑迪萌Dimeng Yuan(HOYO-MiX)/崔瀚普TSAR(HOYO-MiX)/车子玉Ziyu Che(HOYO-MiX)\n[00:00.144] 制作人 : 蔡近翰Zoe(HOYO-MiX)\n[00:00.195]When good old friends are going away\n[00:06.838]Will you wish them to remember your name?\n[00:13.480]When good old days are passing away\n[00:19.851]Will you promise your heart remains the same\n[00:27.289]Never can we suspend the time\n[00:33.943]Having to leave the tracks behind\n[00:40.316]there is a longer way ahead, After all.\n[00:54.403]There used to be a story teller\n[01:00.242]who always painted the sunshine and the rain\n[01:07.428]One has to eventually grow up\n[01:13.258]Spending a lifetime to taste the love and pain\n[01:20.705]Never can we suspend the time\n[01:27.345]Having to leave the tracks behind\n[01:33.718]there is a longer way ahead, After all.\n[01:47.005]If it’s too hard to say goodbye\n[01:53.372]Give us a try to sing a rhyme\n[01:59.768]“May you, the beauty of this world, always shine.”\n[02:13.309]\n[02:14.309] 演唱 Vocal Artist：车子玉Ziyu Che(HOYO-MiX)\n[02:14.356] 弦乐 Strings：龙之艺交响乐团Art of Loong Orchestra\n[02:14.403] 弦乐录音棚 Strings Recording Studio：上海音像公司录音棚YX STUDIO\n[02:14.450] 混音 Mixing Engineer：宫奇Gon(HOYO-MiX)\n[02:14.497] 母带 Mastering Engineer：宫奇Gon(HOYO-MiX)\n[02:14.544] 出品 Produced by：HOYO-MiX\n`,
-    },    {
-      id: 2,
-      title: 'Rubia',
-      artist: '周深、HOYO-MiX',
-      album: '崩坏3 印象曲',
-      coverUrl: 'https://imge.kugou.com/stdmusic/240/20240129/20240129181003171581.jpg', // 替换为你实际的封面图片路径
-      audioUrl: 'https://ipv4.home.445533.xyz:3116/api/download/034A79E54C345156E34176E771632210%7C5D2B778D428486A17D0129AC3E3CC5A4%7CBCABBF76900C9220EC7023352D38B888?source=kugou&br=128kmp3', // **你需要把音频文件放到 public 文件夹里，并修改这里的路径**
-      lrcString: `?[id:$00000000]\r\n[ar:周深]\r\n[ti:Rubia (崩坏3《渡尘》动画短片印象曲)]\r\n[by:]\r\n[hash:034a79e54c345156e34176e771632210]\r\n[al:Rubia]\r\n[sign:]\r\n[qq:]\r\n[total:0]\r\n[offset:0]\r\n[00:00.00]周深、HOYO-MiX - Rubia (崩坏3《渡尘》动画短片印象曲)\r\n[00:01.50]作词：TetraCalyx\r\n[00:02.48]作曲：蔡近翰Zoe(HOYO-MiX)\r\n[00:02.49]编曲：宫奇Gon(HOYO-MiX)、杨启翔Frex(HOYO-MiX)\r\n[00:03.72]Life blooms like a flower\r\n[00:07.01]Far away or by the road\r\n[00:10.57]Waiting for the one\r\n[00:13.86]To find the way back home\r\n[00:17.53]Rain falls a thousand times\r\n[00:21.09]No footprints of come-and-go\r\n[00:24.68]You who once went by\r\n[00:28.29]Where will you belong\r\n[00:30.67]I feel your sigh and breath\r\n[00:33.99]In the last blow of wind\r\n[00:38.43]Not yet for the story on the last page\r\n[00:42.67]It's not the end\r\n[00:46.02]Life blooms like a flower\r\n[00:49.29]Far away or by the road\r\n[00:52.86]Waiting for the one\r\n[00:56.17]To find the way back home\r\n[00:59.96]Time flows across the world\r\n[01:03.44]There is always a longer way to go\r\n[01:08.03]Till I reach your arms\r\n[01:10.37]A Madder there for you\r\n[01:14.39]Up against the stream\r\n[01:17.65]Waterways will join as one\r\n[01:21.17]Tracing to the source\r\n[01:24.67]No more strayed or lost\r\n[01:27.07]You will see petals fly\r\n[01:30.42]When lament becomes carol\r\n[01:34.89]Could you please hear my voice\r\n[01:37.46]That hungers for a duo\r\n[01:42.37]Life blooms like a flower\r\n[01:45.74]Far away or by the road\r\n[01:49.27]Waiting for the one\r\n[01:52.67]To find the way back home\r\n[01:56.38]Time flows across the world\r\n[01:59.85]There is always a longer way to go\r\n[02:04.34]Till I reach your arms\r\n[02:06.77]A Madder there for you\r\n[02:37.12]Life blooms like a flower\r\n[02:40.52]Far away or by the road\r\n[02:44.01]Waiting for the one\r\n[02:47.42]To find the way back home\r\n[02:51.11]Time flows across the world\r\n[02:54.63]There is always a longer way to go\r\n[02:59.12]Till I reach your arms\r\n[03:01.48]A Madder there for you\r\n[03:05.98]人声录音 Recording：徐威Aaron Xu\r\n[03:06.76]混音/母带 Mixing&Mastering Engineer：宫奇Gon(HOYO-MiX)\r\n[03:07.15]制作人 Producer：蔡近翰Zoe(HOYO-MiX)\r\n[03:07.49]特别鸣谢 Special Thanks：周深工作室\r\n[03:07.85]出品 Produced by：HOYO-MiX\r\n`,
-    },
-    // 可以添加更多歌曲对象
-  ]);
+  const updatePlaylist = (newPlaylist) => {
+    playlist.value = newPlaylist;
+    setPlaylist(newPlaylist);
+    console.log('Playlist updated:', newPlaylist);
+  };
+
+  const addSongToPlaylist = (song) => {
+    updatePlaylist([...playlist.value, song]);
+  };
+
+  const removeSongFromPlaylist = (songId) => {
+    const newPlaylist = playlist.value.filter(s => s.id !== songId);
+    updatePlaylist(newPlaylist);
+  };
+
+  const setCurrentSongIndex = (index) => {
+    if (index >= 0 && index < playlist.value.length) {
+      currentSongIndex.value = index;
+      // 触发音频源更新等操作，例如：
+      // if (audioPlayer.value) {
+      //   audioPlayer.value.src = playlist.value[currentSongIndex.value].audioUrl;
+      //   audioPlayer.value.play().catch(e => console.error("Error playing audio:", e));
+      // }
+    }
+  };
+
+  // ---- 播放列表和当前歌曲状态 ----
   const currentSongIndex = ref(0);
-  const currentSong = computed(() => playlist.value[currentSongIndex.value]);
+  const currentSong = computed(() => playlist.value[currentSongIndex.value] || {});
   const currentLyrics = computed(() => {
     const song = currentSong.value;
     if (song && song.lrcString) {
@@ -84,69 +81,103 @@
     return [];
   });
 
-
-  // ---- 生命周期钩子 ----
-  onMounted(() => {
-    console.log('Audio player mounted:', audioPlayer.value);
-     // 在挂载后设置一次初始音量
-     if (audioPlayer.value) {
-         audioPlayer.value.volume = volume.value;
-     }
-  });
-
-  // ---- 监听音量状态变化并更新音频元素音量 ----
-  watch(volume, (newVolume) => {
-      if(audioPlayer.value) {
-          audioPlayer.value.volume = newVolume;
+  // ---- Broadcast Channel for cross-tab communication ----
+  const playlistChannel = new BroadcastChannel('music-player-playlist-updates');
+  const handleLyricClicked = (time) => {
+    currentTime.value = time;
+    if (audioPlayer.value) {
+      audioPlayer.value.currentTime = time;
+      if (!isPlaying.value) {
+        play(); // 可选：点击歌词后自动播放
       }
+    }
+    console.log('歌词被点击，跳转到时间:', time);
+  };
+  onMounted(() => {
+    // 监听来自其他标签页/窗口的 Local Storage 更新
+    window.onstorage = (event) => {
+      if (event.key === 'music-player-playlist') {
+        console.log('Local Storage playlist updated by another tab/window');
+        playlist.value = getPlaylist();
+        // 你的播放列表显示组件会自动更新，因为 playlist 是一个 ref
+      }
+    };
+
+    playlistChannel.onmessage = (event) => {
+      if (event.data && event.data.type === 'playlistUpdated') {
+        console.log('Playlist updated via Broadcast Channel');
+        playlist.value = getPlaylist();
+      }
+    };
+
+    // 初始化加载时可能需要做一些事情，例如设置初始歌曲
+    if (playlist.value.length > 0 && currentSong.value === undefined) {
+      // 设置第一首歌为初始歌曲
+      // 注意：这里只是一个示例，你需要根据你的具体逻辑来决定
+      currentSongIndex.value = 0;
+    }
   });
 
+  // ---- 记得导入你可能用到的其他 ref 和 computed 属性 ----
+  import { computed, watch } from 'vue';
+import LyricsDisplay from './components/LyricsDisplay.vue';
+import PlaybackControls from './components/PlaybackControls.vue';
+import SongInfo from './components/SongInfo.vue';
+import { parseLrc } from './utils/lrcParser';
 
-  // ---- 音频事件处理函数 ----
+  // ---- 你的其他 ref 和 computed 属性 (从你之前的 App.vue 中复制过来) ----
+  const audioPlayer = ref(null);
+  const isPlaying = ref(false);
+  const currentTime = ref(0);
+  const duration = ref(0);
+  const volume = ref(0.5);
+
+  // ---- 监听音量变化 ----
+  watch(volume, (newVolume) => {
+    if(audioPlayer.value) {
+      audioPlayer.value.volume = newVolume;
+    }
+  });
+
+  // ---- 音频事件处理函数 (从你之前的 App.vue 中复制过来) ----
   const handlePlay = () => { isPlaying.value = true; console.log('Playback started'); };
   const handlePause = () => { isPlaying.value = false; console.log('Playback paused'); };
   const handleTimeUpdate = () => { if (audioPlayer.value) { currentTime.value = audioPlayer.value.currentTime; } };
   const handleLoadedMetadata = () => { if (audioPlayer.value) { duration.value = audioPlayer.value.duration; console.log('Metadata loaded, duration:', duration.value); } };
   const handleEnded = () => { console.log('Playback ended'); isPlaying.value = false; playNext(); };
 
-
-  // ---- 播放控制方法 ----
+  // ---- 播放控制方法 (从你之前的 App.vue 中复制过来) ----
   const play = () => { if (audioPlayer.value) { audioPlayer.value.play().catch(e => console.error("Error playing audio:", e)); } };
   const pause = () => { if (audioPlayer.value) { audioPlayer.value.pause(); } };
   const togglePlayPause = () => { if (isPlaying.value) { pause(); } else { play(); } };
   const handleSeek = (time) => { if (audioPlayer.value) { audioPlayer.value.currentTime = time; console.log('Seeking to:', time); } };
 
   const playNext = () => {
-     currentSongIndex.value = (currentSongIndex.value + 1) % playlist.value.length;
-     // currentSong 变化会更新 audioUrl，浏览器会自动 load
-     // 确保加载完成后再尝试播放，或者在loadedmetadata中自动播放
-      if(audioPlayer.value) {
-           // 简单的延迟播放，确保 src 更新和加载开始
-           setTimeout(() => {
-               play();
-           }, 50); // 延迟一小段时间
-      }
-     console.log('Playing next song:', currentSong.value.title);
+    currentSongIndex.value = (currentSongIndex.value + 1) % playlist.value.length;
+    if(audioPlayer.value) {
+      setTimeout(() => {
+        play();
+      }, 50);
+    }
+    console.log('Playing next song:', currentSong.value.title);
   };
 
-   const playPrevious = () => {
-      currentSongIndex.value = (currentSongIndex.value - 1 + playlist.value.length) % playlist.value.length;
-       if(audioPlayer.value) {
-           setTimeout(() => {
-               play();
-           }, 50);
-       }
-      console.log('Playing previous song:', currentSong.value.title);
-   };
+  const playPrevious = () => {
+    currentSongIndex.value = (currentSongIndex.value - 1 + playlist.value.length) % playlist.value.length;
+    if(audioPlayer.value) {
+      setTimeout(() => {
+        play();
+      }, 50);
+    }
+    console.log('Playing previous song:', currentSong.value.title);
+  };
 
-   const handleVolumeChange = (newVolume) => {
-        volume.value = newVolume; // 更新音量状态
-        console.log('Volume changed to:', newVolume);
-        // 音量状态的变化会被 watch 监听，从而更新音频元素的实际音量
-   };
-
-
-</script><style>
+  const handleVolumeChange = (newVolume) => {
+    volume.value = newVolume;
+    console.log('Volume changed to:', newVolume);
+  };
+</script>
+<style>
 /* 让 html, body, #app 占满整个视口 */
 html, body, #app {
   margin: 0;

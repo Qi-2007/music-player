@@ -1,83 +1,120 @@
+<script setup>
+import { computed, defineProps, nextTick, ref, watch } from 'vue';
+
+const props = defineProps({
+  lyrics: {
+    type: Array,
+    default: () => []
+  },
+  currentTime: {
+    type: Number,
+    default: 0
+  }
+});
+
+const activeLyricRef = ref(null);
+const isUserScrolling = ref(false);
+const lyricsContainer = ref(null);
+let scrollTimeout = null;
+const previousActiveLyricIndex = ref(-1); // 新增：记录上一个活跃歌词的索引
+
+const isActiveLyric = (lyric, i) => {
+  if (!props.lyrics || props.lyrics.length === 0) {
+    return false;
+  }
+  const nextLyric = props.lyrics[i + 1];
+  return props.currentTime >= lyric.time &&
+         (!nextLyric || props.currentTime < nextLyric.time);
+};
+
+const activeLyricIndex = computed(() => {
+  const index = props.lyrics.findIndex((lyric, i) => isActiveLyric(lyric, i));
+  return index !== -1 ? index : -1;
+});
+
+const setActiveLyricElement = (el) => {
+  activeLyricRef.value = el;
+};
+
+watch(activeLyricIndex, async (newIndex, oldIndex) => {
+  if (newIndex !== -1 && newIndex !== oldIndex && !isUserScrolling.value) {
+    await nextTick();
+    const activeElement = lyricsContainer.value && lyricsContainer.value.children[newIndex];
+    if (activeElement) {
+      activeLyricRef.value = activeElement;
+      setTimeout(() => {
+        if (activeLyricRef.value && lyricsContainer.value && !isUserScrolling.value) {
+          activeLyricRef.value.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+          });
+          previousActiveLyricIndex.value = newIndex; // 更新上一个活跃歌词的索引
+        } else {
+          console.log(`[Scroll Blocked] Index: ${newIndex}, Lyrics Length: ${props.lyrics.length}, Scrolling: ${isUserScrolling.value}, Container: ${lyricsContainer.value}`);
+        }
+      }, 200);
+    } else {
+      console.log('Active element not found.');
+    }
+  } else if (newIndex !== -1 && oldIndex === -1 && !isUserScrolling.value) {
+    // 处理歌曲开始时第一次高亮歌词的情况
+    await nextTick();
+    const activeElement = lyricsContainer.value && lyricsContainer.value.children[newIndex];
+    if (activeElement) {
+      activeLyricRef.value = activeElement;
+      setTimeout(() => {
+        if (activeLyricRef.value && lyricsContainer.value && !isUserScrolling.value) {
+          activeLyricRef.value.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+          });
+          previousActiveLyricIndex.value = newIndex;
+        }
+      }, 600);
+    }
+  }
+});
+
+const handleScrollStart = () => {
+  isUserScrolling.value = true;
+};
+
+const handleScrollEnd = () => {
+  isUserScrolling.value = false;
+};
+
+const handleWheel = () => {
+  isUserScrolling.value = true;
+  clearTimeout(scrollTimeout);
+  scrollTimeout = setTimeout(() => {
+    isUserScrolling.value = false;
+  }, 200);
+};
+</script>
+
 <template>
-    <div class="lyrics-display">
-      <div
-        v-for="(lyric, index) in lyrics"
-        :key="index"
-        class="lyric-line"
-        :class="{ active: isActiveLyric(lyric, index) }" :ref="el => { if (isActiveLyric(lyric, index)) activeLyricRef = el }"
-        >
-        {{ lyric.text }}
-      </div>
+  <div
+    class="lyrics-display"
+    @mousedown="handleScrollStart"
+    @touchstart="handleScrollStart"
+    @mouseup="handleScrollEnd"
+    @touchend="handleScrollEnd"
+    @mouseleave="handleScrollEnd"
+    ref="lyricsContainer"
+    @wheel="handleWheel"
+  >
+    <div
+      v-for="(lyric, index) in lyrics"
+      :key="index"
+      class="lyric-line"
+      :class="{ active: isActiveLyric(lyric, index) }"
+      :ref="(el) => isActiveLyric(lyric, index) ? setActiveLyricElement(el) : null"
+      @click="$emit('lyric-clicked', lyric.time)"
+    >
+      {{ lyric.text }}
     </div>
-  </template>
-  
-  <script setup>
-    import { defineProps, ref, watch, nextTick, computed } from 'vue';
-  
-    // ... (props 和 activeLyricRef 定义保持不变) ...
-     const props = defineProps({
-       lyrics: {
-         type: Array,
-         default: () => []
-       },
-       currentTime: {
-         type: Number,
-         default: 0
-       }
-     });
-  
-     const activeLyricRef = ref(null);
-  
-  
-    // 判断歌词行是否为当前活跃行 (逻辑不变)
-     const isActiveLyric = (lyric, i) => {
-       if (!props.lyrics || props.lyrics.length === 0) {
-         return false;
-       }
-  
-       const nextLyric = props.lyrics[i + 1];
-  
-       return props.currentTime >= lyric.time &&
-              (!nextLyric || props.currentTime < nextLyric.time);
-     };
-  
-     // 计算当前活跃歌词的索引 (逻辑不变)
-     const activeLyricIndex = computed(() => {
-         const index = props.lyrics.findIndex((lyric, i) => isActiveLyric(lyric, i));
-         // 返回找到的索引，如果没找到（例如，在歌曲开始前），返回 -1
-         return index !== -1 ? index : -1;
-     });
-  
-  
-    // 监听 currentTime 的变化，当活跃歌词行改变时滚动
-    watch(() => props.currentTime, (newTime, oldTime) => {
-         // 只有当有活跃歌词索引（大于等于0）且引用存在时才尝试滚动
-         if (activeLyricIndex.value >= 0 && activeLyricRef.value) {
-             nextTick(() => {
-                 const scrollDelay = 600; // 保持延迟，等待 DOM 更新
-  
-                 setTimeout(() => {
-                     // 再次检查元素是否存在
-                     if (activeLyricRef.value) {
-                         activeLyricRef.value.scrollIntoView({
-                             behavior: 'smooth', // 平滑滚动
-                             block: 'center'     // 将当前行滚动到容器中央
-                         });
-                     }else{console.log(activeLyricIndex.value+"|"+props.lyrics.length)}
-                 }, scrollDelay);
-             });
-         }
-     });
-  
-     // 移除 isLyricVisible 函数和相关的 linesBefore/linesAfter 变量
-     /*
-     const linesBefore = 1;
-     const linesAfter = 1;
-     const isLyricVisible = (index) => { ... };
-     */
-  
-  </script>
-  
+  </div>
+</template>
   <style scoped>
   .lyrics-display {
     flex-grow: 1;

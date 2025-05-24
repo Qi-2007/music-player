@@ -1,6 +1,6 @@
 # 一个使用ai编写的vite 音乐播放器前端
 
-[![图片](image/1.jpg)]
+![图片](image/1.png)
 
 ## 项目介绍
 
@@ -71,7 +71,7 @@
 1.  **打开您的音乐播放器页面。**
 2.  **打开浏览器的开发者工具 (通常按下 F12 键)。**
 3.  **切换到 "Console" (控制台) 选项卡。**
-4.  **粘贴并执行以下 JavaScript 代码，以添加一些示例歌曲到 `localStorage` 中 (如果您的项目使用 `localStorage` 存储播放列表):**
+4.  **粘贴并执行以下 JavaScript 代码，以添加一些示例歌曲到 `localStorage`:**
 
     ```javascript
     const initialPlaylist = [

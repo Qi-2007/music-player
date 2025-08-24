@@ -19,10 +19,10 @@
         // 提供一个包含默认值的空对象作为默认值，防止访问不存在的属性报错
         default: () => ({
           id: null,
-          title: '未知歌曲',
+          title: '暂无音乐',
           artist: '未知艺术家',
           album: '未知专辑',
-          coverUrl: '/cover.jpg', // 请替换为你的默认封面图片路径
+          coverUrl: 'https://img2.kuwo.cn/star/albumcover/500/s4s70/75/3885449841.jpg', // 请替换为你的默认封面图片路径
           audioUrl: null,
           lrcString: null
         })

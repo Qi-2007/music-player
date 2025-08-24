@@ -208,9 +208,8 @@ import {
 
   // ---- 生命周期钩子和状态持久化 ----
   onMounted(() => {
-    let loadedTime = loadCurrentTime('music-player-current-time'); // 先加载，但可能被覆盖
     let loadedSongId = loadCurrentSongId(MUSIC_PLAYER_CURRENT_SONG_ID_KEY);
-
+    let loadedTime = loadCurrentTime('music-player-current-time'); // 先加载，但可能被覆盖
     // 1. 优先加载来自下载器（或其他标签页）的临时播放列表
     const initialDownloaderPlaylistJson = localStorage.getItem('musicPlayer_playlist');
     const initialDownloaderActiveIndexStr = localStorage.getItem('musicPlayer_currentSongIndex');
@@ -428,8 +427,13 @@ import {
       audioPlayer.value.volume = newVolume;
     }
   });
-
+//监听歌曲切换
   watch(currentSongIndex, (newIndex, oldIndex) => {
+    //新增修改网站title和icon
+    document.title = `${currentSong.value.title}-${currentSong.value.artist} qPlayer`;
+    let link = document.querySelector("link[rel~='icon']");
+    link.href = currentSong.value.coverUrl;
+    //原有逻辑不变
     if (oldIndex !== undefined && newIndex !== oldIndex) {
         if (playlist.value.length > 0 && newIndex >= 0 && newIndex < playlist.value.length) {
             const newSong = playlist.value[newIndex];
@@ -447,10 +451,10 @@ import {
 
                     const oldSongId = playlist.value[oldIndex]?.id;
 
-                    if (newSongId !== oldSongId) {
+                    if (newSongId !== oldSongId) {//here maybe have bug
                         currentTime.value = 0;
                         audioPlayer.value.currentTime = 0;
-                        console.log('歌曲切换 (ID不同)，从0开始播放。');
+                        console.log(`歌曲切换 ( ${oldIndex}(${oldSongId}) to ${newIndex}(${newSongId}) )，从0开始播放。`);
                     } else {
                         const savedTime = loadCurrentTime('music-player-current-time');
                         currentTime.value = savedTime;

@@ -192,7 +192,7 @@ import {
       const initialSong = playlist.value[currentSongIndex.value];
       if (audioPlayer.value && initialSong && initialSong.audioUrl) {
         audioPlayer.value.src = initialSong.audioUrl;
-        audioPlayer.value.currentTime = currentTime.value; // 使用加载的进度时间
+        audioPlayer.value.currentTime = currentTime.value;
         console.log('Initial song loaded:', initialSong.audioUrl, 'at time:', currentTime.value);
         audioPlayer.value.load();
       } else {
@@ -208,9 +208,9 @@ import {
 
   // ---- 生命周期钩子和状态持久化 ----
   onMounted(() => {
+    let loadedTime = loadCurrentTime('music-player-current-time');
     let loadedSongId = loadCurrentSongId(MUSIC_PLAYER_CURRENT_SONG_ID_KEY);
-    let loadedTime = loadCurrentTime('music-player-current-time'); // 先加载，但可能被覆盖
-    // 1. 优先加载来自下载器（或其他标签页）的临时播放列表
+
     const initialDownloaderPlaylistJson = localStorage.getItem('musicPlayer_playlist');
     const initialDownloaderActiveIndexStr = localStorage.getItem('musicPlayer_currentSongIndex');
 
@@ -227,8 +227,7 @@ import {
           }
           currentSongIndex.value = foundIndex !== -1 ? foundIndex : 0;
 
-          // **核心修改：如果来自下载器的新列表，则强制重置播放时间**
-          currentTime.value = 0; // **强制从 0 开始播放新列表**
+          currentTime.value = 0;
           console.log('播放器初始化：从下载器 localStorage 加载播放列表和活动项，进度已重置为 0。');
 
           localStorage.removeItem('musicPlayer_playlist');
@@ -238,7 +237,6 @@ import {
         console.error('初始化播放器时解析下载器 localStorage 数据失败:', e);
       }
     } else {
-      // 2. 如果没有来自下载器的歌单，则从播放器自身的持久化存储中加载
       console.log('没有检测到来自下载器的歌单，尝试加载播放器自身歌单。');
       playlist.value = getPlaylist('music-player-playlist');
 
@@ -248,7 +246,6 @@ import {
       }
       currentSongIndex.value = foundIndex !== -1 ? foundIndex : 0;
 
-      // 只有在加载自身歌单时才恢复保存的进度
       currentTime.value = loadedTime;
       console.log('Initializing audio player time to:', currentTime.value);
 
@@ -264,18 +261,22 @@ import {
       }
     }
 
-    // 3. 初始设置音频播放器音量
     if (audioPlayer.value) {
       audioPlayer.value.volume = volume.value;
     }
 
     initialLoadSong();
 
-
-    // **处理播放器窗口状态 (保持不变)**
     const savedWindowState = localStorage.getItem(MUSIC_PLAYER_WINDOW_STATE_KEY);
     if (savedWindowState === 'true') {
-      console.log('播放窗口被重复打开？');
+      console.log('检测到播放器窗口上次是打开状态，尝试重新激活或确保其状态正确。');
+      const musicPlayerWin = window.open('javascript:;', 'musicPlayerWindow');
+      if (musicPlayerWin) {
+          musicPlayerWin.focus();
+          console.log("尝试激活/打开名为 'musicPlayerWindow' 的窗口。");
+      } else {
+          console.warn("无法激活/打开播放器窗口，可能被浏览器阻止。");
+      }
       localStorage.setItem(MUSIC_PLAYER_WINDOW_STATE_KEY, 'true');
       console.log('当前播放窗口状态设置为 true。');
     } else {
@@ -327,7 +328,7 @@ import {
             }
             currentSongIndex.value = targetIndex !== -1 ? targetIndex : 0;
 
-            currentTime.value = 0; // 外部切换，强制从0开始
+            currentTime.value = 0;
             console.log('外部更新，新歌或新列表，从0开始播放。');
             if (audioPlayer.value) {
                 audioPlayer.value.currentTime = 0;
@@ -427,18 +428,47 @@ import {
       audioPlayer.value.volume = newVolume;
     }
   });
-//监听歌曲切换
+
+  // 监听 currentSongIndex 变化，更新 audioPlayer.src 并保存当前歌曲ID
   watch(currentSongIndex, (newIndex, oldIndex) => {
-    //新增修改网站title和icon
+    // 修复：确保在首次加载时（oldIndex为0）不执行歌曲切换逻辑
+    const isInitialLoad = (oldIndex === 0 && newIndex !== 0);
+
+    // 新增修改网站title和icon
     document.title = `${currentSong.value.title}-${currentSong.value.artist} qPlayer`;
     let link = document.querySelector("link[rel~='icon']");
-    link.href = currentSong.value.coverUrl;
-    //原有逻辑不变
+    if (link && currentSong.value.coverUrl) {
+      link.href = currentSong.value.coverUrl;
+    }
+
+    // 原有逻辑
     if (oldIndex !== undefined && newIndex !== oldIndex) {
         if (playlist.value.length > 0 && newIndex >= 0 && newIndex < playlist.value.length) {
             const newSong = playlist.value[newIndex];
             const newAudioUrl = newSong.audioUrl;
             const newSongId = newSong.id;
+
+            // 核心修复: 添加对 oldIndex 的有效性判断，同时检查是否为初始加载
+            const oldSongId = (oldIndex !== undefined && oldIndex >= 0 && oldIndex < playlist.value.length)
+                ? playlist.value[oldIndex]?.id
+                : null;
+            
+            // 如果新旧歌曲ID都存在且不同，并且不是初始加载，才执行重置进度的逻辑
+            if (newSongId && oldSongId && newSongId !== oldSongId && !isInitialLoad) {
+                currentTime.value = 0;
+                if (audioPlayer.value) {
+                    audioPlayer.value.currentTime = 0;
+                }
+                console.log(`歌曲切换 ( ${oldIndex}(${oldSongId}) to ${newIndex}(${newSongId}) )，从0开始播放。`);
+            } else {
+                // 否则，恢复上次播放进度 (例如，刷新页面或列表重排序)
+                const savedTime = loadCurrentTime('music-player-current-time');
+                currentTime.value = savedTime;
+                if (audioPlayer.value) {
+                    audioPlayer.value.currentTime = savedTime;
+                }
+                console.log(`歌曲ID相同或为初始加载，恢复到保存时间点: ${currentTime.value}`);
+            }
 
             saveCurrentSongId(newSongId, MUSIC_PLAYER_CURRENT_SONG_ID_KEY);
 
@@ -446,21 +476,7 @@ import {
                 if (audioPlayer.value.src !== newAudioUrl) {
                     audioPlayer.value.src = newAudioUrl;
                     console.log('Audio source updated to:', newAudioUrl);
-
                     audioPlayer.value.load();
-
-                    const oldSongId = playlist.value[oldIndex]?.id;
-
-                    if (newSongId !== oldSongId) {//here maybe have bug
-                        currentTime.value = 0;
-                        audioPlayer.value.currentTime = 0;
-                        console.log(`歌曲切换 ( ${oldIndex}(${oldSongId}) to ${newIndex}(${newSongId}) )，从0开始播放。`);
-                    } else {
-                        const savedTime = loadCurrentTime('music-player-current-time');
-                        currentTime.value = savedTime;
-                        audioPlayer.value.currentTime = savedTime;
-                        console.log('歌曲ID相同但索引变了，恢复到保存时间点:', currentTime.value);
-                    }
                 } else {
                     audioPlayer.value.currentTime = currentTime.value;
                     console.log('src 相同，更新音频时间到当前 ref 值:', currentTime.value);

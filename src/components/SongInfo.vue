@@ -39,7 +39,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-bottom: 30px; /* 增加与下方播放控制的间距 */
+    margin-bottom: 10px; /* 增加与下方播放控制的间距 */
     width: 100%;
      max-width: 500px; /* 例如设置一个最大宽度 */
   }

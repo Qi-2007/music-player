@@ -2,7 +2,18 @@
   <div id="app">
     <div class="playback-container">
       <div class="blurred-background" :style="{ backgroundImage: 'url(' + currentSong.coverUrl + ')' }"></div>
-      <div class="left-panel">
+
+      <!-- 新增：歌词/信息切换按钮 -->
+      <button @click="toggleLyricsPanel" class="toggle-button">
+        {{ isLyricsPanelVisible ? '显示歌曲信息' : '显示歌词' }}
+      </button>
+
+      <!-- 左侧面板，在移动端根据状态显示或隐藏 -->
+      <div 
+        class="left-panel" 
+        :class="{ 'center-content': !shouldShowRightPanel }"
+        v-show="shouldShowLeftPanel"
+      >
         <SongInfo :song="currentSong" />
         <PlaybackControls
           :isPlaying="isPlaying"
@@ -18,7 +29,8 @@
         />
       </div>
 
-      <div class="right-panel">
+      <!-- 右侧面板，在移动端根据状态显示或隐藏 -->
+      <div class="right-panel" v-show="shouldShowRightPanel">
         <LyricsDisplay
           :lyrics="currentLyrics"
           :currentTime="currentTime"
@@ -73,6 +85,23 @@ import {
   const volume = ref(0.5);
   const audioPlayer = ref(null);
   const playbackControls = ref(null);
+  
+  // 新增：用于判断是否为移动设备和控制面板显示
+  const isMobile = ref(false);
+  const isLyricsPanelVisible = ref(false); // 默认关闭歌词显示
+
+  // 新增：计算属性来控制面板显示
+  const shouldShowLeftPanel = computed(() => {
+    // 桌面端：总是显示左侧面板
+    // 移动端：当不显示歌词时显示左侧面板
+    return !isMobile.value || !isLyricsPanelVisible.value;
+  });
+
+  const shouldShowRightPanel = computed(() => {
+    // 桌面端：根据歌词显示状态决定
+    // 移动端：只在显示歌词时显示右侧面板
+    return isMobile.value ? isLyricsPanelVisible.value : isLyricsPanelVisible.value;
+  });
 
   const isUserSeekingFromControls = computed(() =>
     playbackControls.value ? playbackControls.value.isUserSeeking : false
@@ -204,9 +233,32 @@ import {
         if (audioPlayer.value) audioPlayer.value.src = '';
     }
   };
+  
+  // 新增：处理窗口大小变化，更新 isMobile 状态
+  const handleResize = () => {
+    isMobile.value = window.innerWidth <= 768; // 修改为更常见的移动端断点
+  };
+
+  // 新增：切换面板显示状态
+  const toggleLyricsPanel = () => {
+    isLyricsPanelVisible.value = !isLyricsPanelVisible.value;
+    // 保存状态到 localStorage
+    localStorage.setItem('music-player-lyrics-visible', isLyricsPanelVisible.value);
+  };
+
 
   // ---- 生命周期钩子和状态持久化 ----
   onMounted(() => {
+    // 新增：在组件挂载时监听窗口大小
+    handleResize();
+    window.addEventListener('resize', handleResize);
+
+    // 从 localStorage 恢复歌词显示状态
+    const savedLyricsVisible = localStorage.getItem('music-player-lyrics-visible');
+    if (savedLyricsVisible !== null) {
+      isLyricsPanelVisible.value = savedLyricsVisible === 'true';
+    }
+
     let loadedTime = loadCurrentTime('music-player-current-time');
     let loadedSongId = loadCurrentSongId(MUSIC_PLAYER_CURRENT_SONG_ID_KEY);
 
@@ -291,6 +343,8 @@ import {
 
     onUnmounted(() => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      // 新增：在组件卸载时移除窗口大小监听器
+      window.removeEventListener('resize', handleResize);
       localStorage.setItem(MUSIC_PLAYER_WINDOW_STATE_KEY, 'false');
       console.log('播放器组件卸载，窗口状态设置为 false。');
     });
@@ -557,121 +611,402 @@ html, body, #app {
   padding: 0;
   width: 100%;
   height: 100%;
-  overflow: hidden; /* 防止出现全局滚动条 */
+  overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   color: #ffffff;
-  background-color: #121212; /* 全局背景色 */
+  background-color: #121212;
 }
 
 /* #app 保持定位 */
 #app {
-   position: relative; /* 确保子元素的绝对定位是相对于 #app */
-   /* 移除 display: flex; justify-content: center; align-items: center; */
+   position: relative;
 }
 
 @keyframes rotate {
   from {
-    transform: translate(-50%, -50%) rotate(0deg); /* 居中 + 初始旋转 */
+    transform: translate(-50%, -50%) rotate(0deg);
   }
   to {
-    transform: translate(-50%, -50%) rotate(360deg); /* 居中 + 最终旋转 */
+    transform: translate(-50%, -50%) rotate(360deg);
   }
 }
 
 /* 模糊背景元素样式：位于底层 */
- .blurred-background {
-  position: absolute; /* 使用绝对定位 */
-  top: 50%; /* 顶部边缘放在容器的垂直中心 */
-  left: 50%; /* 左侧边缘放在容器的水平中心 */
-  /* 使用 vmax 单位确保尺寸总是基于屏幕的最大边 */
-  width: 150vmax; /* 设置宽度为视口最大维度的 150% */
-  height: 150vmax; /* 设置高度为视口最大维度的 150% */
-  /* 150% 是一个经验值，确保旋转时不会露边，可以根据需要微调，但通常 142% (sqrt(2)*100%) 就足够覆盖一个正方形旋转，150% 更安全 */
-  background-size: cover; /* 确保背景图像覆盖整个元素 */
-  transform: translate(-50%, -50%); /* 将元素自身向左和向上移动自身宽高的一半，实现精确居中 */
-   /* background-image 通过 :style 动态绑定在 template 里 */
-   filter: blur(100px); /* 模糊效果 */
-   opacity: 0.8; /* 透明度 */
-   z-index: -1; /* 确保它在内容之下 */
-  /* 添加旋转动画 */
-  animation: rotate 120s linear infinite; /* 动画名称 时长 速度曲线 重复次数 */
- }
-
+.blurred-background {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 150vmax;
+  height: 150vmax;
+  background-size: cover;
+  transform: translate(-50%, -50%);
+  filter: blur(100px);
+  opacity: 0.8;
+  z-index: -1;
+  animation: rotate 120s linear infinite;
+}
 
 /* playback-container：作为内容容器，填充屏幕，Flex 布局左右分栏 */
 .playback-container {
-   display: flex; /* 保持 Flexbox 布局实现左右分栏 */
-   width: 100%; /* 宽度占满整个视口宽度 */
-   height: 100%; /* 高度占满整个视口高度 */
-   overflow: hidden; /* 隐藏超出容器的内容 */
-   position: relative; /* 保持 relative 定位 */
-   background-color: transparent; /* 确保背景是透明的 */
-   z-index: 1; /* 确保它在模糊背景之上 */
-   align-items: stretch; /* 让 Flex 子项（左右面板）沿交叉轴（垂直）拉伸填充容器高度 */
+    display: flex;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    background-color: transparent;
+    z-index: 1;
+    align-items: stretch;
 }
 
 /* 移除伪元素样式 */
 .playback-container::before {
-   content: none;
+    content: none;
 }
-
 
 /* left-panel：Flex Item，内容垂直排列 */
 .left-panel {
-   flex: 0.2; /* 占据一半宽度 */
-   display: flex;
-   flex-direction: column;
-   align-items: center;
-   justify-content: center; /* 内容从顶部开始排列 */
-   padding: 8vw; /* 内边距 */
-   box-sizing: border-box;
-   position: relative;
-   z-index: 1;
-   min-height: 0; 
+    flex: 0.2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8vw;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1;
+    min-height: 0;
+    width: 100%;
+}
+
+/* 新增：当只显示左侧面板时，内容居中并添加适当的内边距 */
+.left-panel.center-content {
+    flex: 1;
+    justify-content: center;
+    padding: 4vw;
 }
 
 /* right-panel：Flex Item，自身也是一个 Flex 容器来管理歌词滚动 */
 .right-panel {
-   flex: 1.8; /* 占据一半宽度 */
-   padding: 4vw; /* 内边距 */
-   box-sizing: border-box;
-   position: relative;
-   z-index: 1;
-   /* overflow-y: auto; */ /* 滚动由 LyricsDisplay 自身负责 */
-
-   /* 将 right-panel 自身设置为 Flex 容器 */
-   display: flex;
-   flex-direction: column; /* 歌词等内容垂直排列 */
-
-   height: 100vh; /* 高度占满整个视口高度 */
-   /* 歌词区域将是 right-panel 的 Flex 子项，需要 flex-grow: 1 */
+    flex: 1.8;
+    padding: 4vw;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-height: 100vh; /* 限制最大高度 */
 }
 
-/* 调整 LyricsDisplay 组件内部的样式，使其在 right-panel Flex 容器中正确布局和滚动 */
-/* 在 src/components/LyricsDisplay.vue 的 style 中添加/修改以下样式 */
-/* 关闭按钮样式保持不变 */
- .close-button {
-   position: absolute;
-   top: 20px;
-   left: 20px;
-   background: rgba(255, 255, 255, 0.1);
-   border: none;
-   border-radius: 50%;
-   width: 30px;
-   height: 30px;
-   display: flex;
-   justify-content: center;
-   align-items: center;
-   color: white;
-   font-size: 16px;
-   cursor: pointer;
-   z-index: 10;
-   backdrop-filter: blur(5px);
-   -webkit-backdrop-filter: blur(5px);
- }
+/* 确保内容不会超出容器 */
+.song-info-container {
+    width: 80%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
 
- .close-button:hover {
-     background: rgba(255, 255, 255, 0.2);
- }
+.playback-controls-container {
+    width: 80%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-height: 30vh; /* 限制播放控制容器最大高度 */
+    overflow: hidden;
+    margin-top: 2rem;
+}
 
+/* 歌曲信息文本样式 */
+.song-info .text-info {
+    max-width: 100%;
+    word-wrap: break-word;
+    word-break: break-word;
+    text-align: center;
+    padding: 0 20px;
+    box-sizing: border-box;
+    max-height: 30vh; /* 限制文本信息最大高度 */
+    overflow: hidden;
+}
+
+.song-info .text-info .title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.song-info .text-info .artist,
+.song-info .text-info .album {
+    font-size: 1.1rem;
+    opacity: 0.8;
+    margin-bottom: 0.3rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 专辑封面样式优化 (修正为 album-art) */
+.song-info .album-art {
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    max-width: 80%;
+    height: auto;
+    margin-bottom: 1.5rem;
+    max-height: 40vh; /* 限制专辑封面最大高度 */
+    object-fit: contain;
+}
+
+/* 按钮样式 */
+.close-button,
+.toggle-button {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: white;
+    cursor: pointer;
+    z-index: 10;
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    font-weight: bold;
+    transition: all 0.3s ease;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.close-button {
+    top: 20px;
+    left: 20px;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+}
+
+.close-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.toggle-button {
+    top: 20px;
+    right: 20px;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+}
+
+.toggle-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+}
+
+/* 响应式媒体查询 - 合并优化版本 */
+/* 移动端特殊样式 (≤768px) */
+@media (max-width: 768px) {
+    .left-panel {
+        padding: 20px;
+    }
+    
+    .left-panel.center-content {
+        padding: 50px; /* 移动端更大的内边距 */
+    }
+    
+    .right-panel {
+        padding: 20px;
+        max-height: 100vh;
+    }
+    
+    .song-info-container,
+    .playback-controls-container {
+        width: 100%;
+    }
+    
+    .song-info .text-info {
+        padding: 0 15px;
+        max-height: 25vh;
+    }
+    
+    .song-info .text-info .title {
+        font-size: 1.3rem;
+        -webkit-line-clamp: 3;
+    }
+    
+    .song-info .text-info .artist,
+    .song-info .text-info .album {
+        font-size: 1rem;
+    }
+    
+    .song-info .album-art {
+        max-width: 80%;
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
+
+/* 桌面端特殊样式 (≥769px) */
+@media (min-width: 769px) {
+    .left-panel.center-content {
+        flex: 1;
+        padding: 2vw;
+    }
+    
+    .left-panel.center-content .song-info-container {
+        max-width: 600px;
+        margin: 0 auto;
+        width: 80%;
+    }
+    
+    .left-panel.center-content .playback-controls-container {
+        max-width: 600px;
+        margin: 2rem auto 0;
+        width: 80%;
+    }
+    
+    .song-info .text-info {
+        max-width: 500px;
+        margin: 0 auto;
+    }
+    
+    .song-info .text-info .title {
+        font-size: 2rem;
+    }
+    
+    .song-info .text-info .artist {
+        font-size: 1.3rem;
+    }
+    
+    .song-info .text-info .album {
+        font-size: 1.2rem;
+    }
+}
+
+/* 小屏幕设备特殊优化 (≤480px) */
+@media (max-width: 480px) {
+    .close-button {
+        left: 15px;
+        top: 15px;
+        width: 25px;
+        height: 25px;
+        font-size: 14px;
+    }
+    
+    .toggle-button {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.9rem;
+        right: 15px;
+        top: 15px;
+    }
+    
+    .left-panel.center-content {
+        padding: 30px;
+    }
+    
+    .song-info .text-info {
+        padding: 0 10px;
+        max-height: 20vh;
+    }
+    
+    .song-info .text-info .title {
+        font-size: 1.2rem;
+        margin-bottom: 0.3rem;
+        -webkit-line-clamp: 2;
+    }
+    
+    .song-info .text-info .artist,
+    .song-info .text-info .album {
+        font-size: 0.9rem;
+        margin-bottom: 0.2rem;
+    }
+    
+    .song-info .album-art {
+        max-width: 90%;
+    }
+    
+    .playback-controls-container {
+        margin-top: 1.5rem;
+        max-height: 25vh;
+    }
+}
+
+/* 超小屏幕设备优化 (≤360px) */
+@media (max-width: 360px) {
+    .song-info .text-info .title {
+        font-size: 1.1rem;
+        -webkit-line-clamp: 2;
+    }
+    
+    .song-info .text-info .artist,
+    .song-info .text-info .album {
+        font-size: 0.85rem;
+    }
+    
+    .song-info .album-art {
+        max-height: 25vh;
+    }
+}
+
+/* 纵向空间不足的特殊处理 */
+@media (max-height: 600px) {
+    .left-panel.center-content {
+        padding: 20px;
+    }
+    
+    .song-info .album-art {
+        max-height: 25vh;
+        margin-bottom: 1rem;
+    }
+    
+    .song-info .text-info .title {
+        font-size: 1.2rem;
+        margin-bottom: 0.2rem;
+        -webkit-line-clamp: 1;
+    }
+    
+    .song-info .text-info .artist,
+    .song-info .text-info .album {
+        font-size: 0.9rem;
+        margin-bottom: 0.1rem;
+    }
+    
+    .playback-controls-container {
+        margin-top: 1rem;
+        max-height: 20vh;
+    }
+}
+
+/* 极小高度设备优化 */
+@media (max-height: 400px) {
+    .left-panel.center-content {
+        padding: 15px;
+    }
+    
+    .song-info .album-art {
+        max-height: 20vh;
+        margin-bottom: 0.5rem;
+    }
+    
+    .song-info .text-info {
+        max-height: 15vh;
+    }
+    
+    .song-info .text-info .title {
+        font-size: 1rem;
+        -webkit-line-clamp: 1;
+    }
+    
+    .song-info .text-info .artist,
+    .song-info .text-info .album {
+        font-size: 0.8rem;
+    }
+    
+    .playback-controls-container {
+        max-height: 15vh;
+        margin-top: 0.5rem;
+    }
+}
 </style>

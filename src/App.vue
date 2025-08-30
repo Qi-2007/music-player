@@ -87,7 +87,7 @@ import {
     return [];
   });
 
-  // ---- 音频事件处理函数 (保持不变) ----
+  // ---- 音频事件处理函数 ----
   const handlePlay = () => { isPlaying.value = true; console.log('Playback started'); };
   const handlePause = () => { isPlaying.value = false; console.log('Playback paused'); };
   const handleTimeUpdate = () => {
@@ -121,7 +121,7 @@ import {
     playNext(true);
   };
 
-  // ---- 播放控制方法 (保持不变) ----
+  // ---- 播放控制方法 ----
   const play = () => {
     if (audioPlayer.value && currentSong.value.audioUrl) {
       audioPlayer.value.play().catch(e => console.error("Error playing audio:", e));
@@ -204,7 +204,6 @@ import {
         if (audioPlayer.value) audioPlayer.value.src = '';
     }
   };
-
 
   // ---- 生命周期钩子和状态持久化 ----
   onMounted(() => {
@@ -296,7 +295,6 @@ import {
       console.log('播放器组件卸载，窗口状态设置为 false。');
     });
   });
-
 
   // ---- 监听 localStorage 变化 (来自其他标签页) ----
   window.addEventListener('storage', (event) => {
@@ -491,7 +489,49 @@ import {
         audioPlayer.value.src = '';
         saveCurrentSongId(null, MUSIC_PLAYER_CURRENT_SONG_ID_KEY);
     }
+
+    // --- Media Session API ---
+    if ('mediaSession' in navigator && currentSong.value) {
+      console.log('Setting Media Session metadata...');
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentSong.value.title || '未知歌曲',
+        artist: currentSong.value.artist || '未知艺术家',
+        album: currentSong.value.album || '未知专辑',
+        artwork: [
+          { src: currentSong.value.coverUrl || '', sizes: '512x512', type: 'image/jpeg' },
+        ]
+      });
+
+      // 设置媒体操作处理程序
+      navigator.mediaSession.setActionHandler('play', () => {
+        console.log('Media Session: play action');
+        play();
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        console.log('Media Session: pause action');
+        pause();
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        console.log('Media Session: nexttrack action');
+        playNext(true);
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        console.log('Media Session: previoustrack action');
+        playPrevious(true);
+      });
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (audioPlayer.value) {
+          const seekTime = details.seekTime;
+          if (seekTime !== undefined) {
+            audioPlayer.value.currentTime = seekTime;
+            currentTime.value = seekTime;
+            console.log('Media Session: seekto action, seeking to', seekTime);
+          }
+        }
+      });
+    }
   });
+
 
   watch(currentTime, (newTime) => {
     if (!isUserSeekingFromControls.value && isPlaying.value) {
